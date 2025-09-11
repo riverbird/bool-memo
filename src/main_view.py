@@ -13,6 +13,7 @@ from flet.core.app_bar import AppBar
 from flet.core.border import BorderSide, BorderSideStrokeAlign
 from flet.core.bottom_sheet import BottomSheet
 from flet.core.box import BoxShadow
+from flet.core.buttons import RoundedRectangleBorder
 from flet.core.container import Container
 from flet.core.divider import Divider
 from flet.core.floating_action_button import FloatingActionButton
@@ -73,6 +74,7 @@ class MainView(Column):
             icon=Icons.ADD,
             bgcolor=Colors.BLUE,
             foreground_color=Colors.WHITE,
+            shape=RoundedRectangleBorder(radius=50),
             data=0,
             on_click=self.on_fab_pressed,
         )
@@ -270,7 +272,7 @@ class MainView(Column):
             e.control.page.update()
             return
 
-    def on_fab_pressed(self, e):
+    async def on_fab_pressed(self, e):
         async def on_btn_post_clicked(ex):
             # 关闭BottomSheet
             bs.open = False
@@ -330,31 +332,46 @@ class MainView(Column):
             self.page.update()
 
         def on_select_memo_tag(ex):
-            pass
+            select_id = ex.data
+            select_text = ''
+            for item in ex.control.items:
+                if select_id == item.uid:
+                    select_text = item.text
+                    break
+            src_value = input_memo.value
+            input_memo.value = f"{src_value}\r\n#{select_text}"
+            input_memo.update()
 
         input_memo = TextField(
             hint_text='现在您的想法是...',
             label='任何想法',
             expand=True,
-            filled=True,
+            # filled=True,
             multiline=True,
-            border=InputBorder.OUTLINE,
-            border_radius=5,
+            # border=InputBorder.OUTLINE,
+            # border_radius=5,
             # height=120,
-            autofocus=True,
-            adaptive=True,
+            # autofocus=True,
+            # adaptive=True,
         )
+        tag_list_items = []
+        tag_list = await self.get_memo_tag_list()
+        for tag in tag_list:
+            tag_list_items.append(
+                PopupMenuItem(
+                    text=tag.get('name'),
+                    icon=Icons.TAG_OUTLINED,
+                    data=tag,
+                )
+            )
+
         btn_tag = PopupMenuButton(
             icon=Icons.TAG_OUTLINED,
             content=Row([
                 Icon(name=Icons.TAG_OUTLINED),
                 # Text('截止日期')
             ]),
-            items=[
-                PopupMenuItem(text='今天', icon=Icons.CALENDAR_TODAY_OUTLINED),
-                PopupMenuItem(text='明天', icon=Icons.CALENDAR_VIEW_DAY_OUTLINED),
-                PopupMenuItem(text='下周一', icon=Icons.CALENDAR_VIEW_WEEK_OUTLINED),
-            ],
+            items=tag_list_items,
             on_select=on_select_memo_tag
         )
         btn_post = IconButton(
@@ -476,13 +493,6 @@ class MainView(Column):
         self.page.controls.clear()
         self.page.controls.append(page_view)
         self.page.update()
-
-    def open_drawer(self, e):
-        if self.page:
-            if self.drawer not in self.page.controls:
-                pass
-            self.drawer.open = True
-            self.page.update()
 
     async def on_query_all_memo_click(self, e):
         self.page.drawer.open = False

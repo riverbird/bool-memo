@@ -197,11 +197,32 @@ class MemoEditorView(Column):
         self.page.update()
 
     def build_interface(self):
+        # 操作栏
+        row_ops = Row(
+            alignment=MainAxisAlignment.START,
+            spacing=0,
+            controls=[
+                IconButton(
+                    icon=Icons.UNDO,
+                    tooltip='撤销',
+                    on_click=self.on_button_undo_click
+                ),
+                IconButton(
+                    icon=Icons.REDO,
+                    tooltip='重做',
+                    on_click=self.on_button_redo_click
+                ),
+            ]
+        )
+        self.ops_toolbar = Container(
+            content= row_ops,
+        )
         self.editor = CustomTextField(
             value='',
             hint_text='正文',
             multiline=True,
             expand=True,
+            # suffix=row_ops,
         )
         if self.memo_info is not None:
             self.editor.value = self.memo_info.get('content')
@@ -215,26 +236,7 @@ class MemoEditorView(Column):
             width=self.page.width,
             visible=False
         )
-        # 操作栏
-        self.ops_toolbar = Container(
-            content=Row(
-                alignment=MainAxisAlignment.START,
-                controls=[
-                    IconButton(
-                        icon=Icons.UNDO,
-                        icon_color=Colors.WHITE,
-                        tooltip='撤销',
-                        on_click=self.on_button_undo_click
-                    ),
-                    IconButton(
-                        icon=Icons.REDO,
-                        icon_color=Colors.WHITE,
-                        tooltip='重做',
-                        on_click=self.on_button_redo_click
-                    ),
-                ]
-            )
-        )
+
         # 布局
         cols_body = Column(
             controls=[
