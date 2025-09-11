@@ -1,0 +1,705 @@
+"""
+main_view.py
+"""
+# coding:utf-8
+import json
+from datetime import datetime
+
+import httpx
+from flet import Column, Row, Icons, Colors
+from flet.core import border, border_radius, alignment, padding
+from flet.core.alert_dialog import AlertDialog
+from flet.core.app_bar import AppBar
+from flet.core.border import BorderSide, BorderSideStrokeAlign
+from flet.core.bottom_sheet import BottomSheet
+from flet.core.box import BoxShadow
+from flet.core.container import Container
+from flet.core.divider import Divider
+from flet.core.floating_action_button import FloatingActionButton
+from flet.core.form_field_control import InputBorder
+from flet.core.icon import Icon
+from flet.core.icon_button import IconButton
+from flet.core.image import Image
+from flet.core.list_tile import ListTile
+from flet.core.list_view import ListView
+from flet.core.navigation_drawer import NavigationDrawer, NavigationDrawerPosition
+from flet.core.popup_menu_button import PopupMenuButton, PopupMenuItem
+from flet.core.progress_bar import ProgressBar
+from flet.core.progress_ring import ProgressRing
+from flet.core.safe_area import SafeArea
+from flet.core.scrollable_control import OnScrollEvent
+from flet.core.snack_bar import SnackBar
+from flet.core.text import Text
+from flet.core.text_button import TextButton
+from flet.core.textfield import TextField
+from flet.core.types import MainAxisAlignment, CrossAxisAlignment, ImageFit, FloatingActionButtonLocation
+
+
+class MainView(Column):
+    def __init__(self, page):
+        super().__init__()
+        self.page = page
+        self.selected_idx = -1
+        self.page_idx = 1
+        self.loading = False
+        self.diary_type_list = None
+
+        self.alignment = MainAxisAlignment.SPACE_BETWEEN,
+        self.spacing = 0
+        self.tight = True
+
+        self.dlg_about = AlertDialog(
+            modal=True,
+            title=Text('关于'),
+            content=Column(
+                controls=[Divider(height=1, color='gray'),
+                          Text('布尔备忘v0.1.0'),
+                          Text('浙江舒博特网络科技有限公司 出品'),
+                          Text('官网: http://https://www.zjsbt.cn/service/derivatives'),
+                          ],
+                alignment=MainAxisAlignment.START,
+                width=300,
+                height=90,
+            ),
+            actions=[TextButton("确定", on_click=self.on_about_ok_click), ],
+            actions_alignment=MainAxisAlignment.END,
+        )
+
+        # 抽屉
+        self.page.run_task(self.build_drawer)
+
+        # 浮动按钮
+        self.page.floating_action_button = FloatingActionButton(
+            icon=Icons.ADD,
+            bgcolor=Colors.BLUE,
+            foreground_color=Colors.WHITE,
+            data=0,
+            on_click=self.on_fab_pressed,
+        )
+        self.page.floating_action_button_location = FloatingActionButtonLocation.CENTER_FLOAT
+
+        # self.btn_previous_page = IconButton(
+        #     icon=Icons.ARROW_LEFT,
+        #     on_click=self.on_previous_page,
+        #     disabled=True,
+        # )
+        # self.btn_next_page = IconButton(
+        #     icon=Icons.ARROW_RIGHT,
+        #     on_click=self.on_next_page,
+        #     disabled=False,
+        # )
+        self.page.appbar = AppBar(
+            title=Text('布尔备忘', color=Colors.BLACK),
+            bgcolor=Colors.WHITE,
+            color=Colors.BLACK,
+            actions=[
+                # self.btn_previous_page,
+                # self.btn_next_page,
+                IconButton(
+                    icon=Icons.SEARCH,
+                    on_click=self.on_button_search_click
+                ),
+                IconButton(
+                    icon=Icons.REFRESH,
+                    on_click=self.on_button_refresh_click
+                ),
+            ],
+        )
+
+        content = self.build_interface()
+
+        self.page.bottom_appbar = None
+        self.controls = [content, self.dlg_about]
+        self.page.run_task(self.query_memos_list)
+
+    async def on_previous_page(self, e):
+        if self.page_idx > 2:
+            self.page_idx -= 1
+            # self.btn_previous_page.disabled = False
+            self.page.appbar.update()
+        else:
+            self.page_idx = 1
+            # self.btn_previous_page.disabled = True
+            self.page.appbar.update()
+        await self.query_memos_list(append_mode='restart', tag_id=None)
+
+    async def on_next_page(self, e):
+        self.page_idx += 1
+        # self.btn_previous_page.disabled = False
+        self.page.appbar.update()
+        await self.query_memos_list(append_mode='restart', tag_id=None)
+
+
+    async def query_memos_list(self, append_mode='restart', tag_id=None):
+        self.progress_bar.visible = True
+        self.page.update()
+        if append_mode == 'restart':
+            self.note_list.controls.clear()
+        token = await self.page.client_storage.get_async('token')
+        user_id = await self.page.client_storage.get_async('user_id')
+        if not tag_id:
+            url = f'https://restapi.10qu.com.cn/memo/?user={user_id}&ordering=-create_time'
+        else:
+            url = f'https://restapi.10qu.com.cn/memo/?user={user_id}&tag={tag_id}'
+        headers = {"Authorization": f'Bearer {token}'}
+        try:
+            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+                resp = await client.get(
+                    url,
+                    headers=headers,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                lst_memo = data.get('results')
+                for memo in lst_memo:
+                    dt_time = datetime.strptime(memo.get('update_time'), '%Y-%m-%dT%H:%M:%S.%f')
+                    str_date = dt_time.strftime("%Y-%m-%d %H:%M:%S")
+                    memo_item = Container(
+                        data=memo,
+                        margin=3,
+                        adaptive=True,
+                        border_radius=2,
+                        bgcolor=Colors.WHITE,
+                        padding=padding.only(left=5, top=5, right=5, bottom=5),
+                        on_click=self.on_memo_item_click,
+                        border=border.only(
+                            None, None, None,
+                            BorderSide(1, Colors.GREY_200, BorderSideStrokeAlign.OUTSIDE)),
+                        shadow=BoxShadow(spread_radius=0, blur_radius=0,
+                                         color=Colors.WHITE, offset=(2, 2)),
+                        content=Column(
+                            expand=True,
+                            controls=[
+                                Row(
+                                    alignment=MainAxisAlignment.SPACE_BETWEEN,
+                                    controls=[
+                                        Text(
+                                            value=str_date,
+                                            size=12,
+                                            color=Colors.GREY,
+                                        ),
+                                        PopupMenuButton(
+                                            icon=Icons.MORE_HORIZ_OUTLINED,
+                                            icon_color=Colors.GREY,
+                                            items=[
+                                                PopupMenuItem(
+                                                    icon=Icons.COPY_OUTLINED,
+                                                    text='复制全文',
+                                                    data=memo,
+                                                    on_click=self.on_copy_content
+                                                ),
+                                                PopupMenuItem(
+                                                    icon=Icons.EDIT_OUTLINED,
+                                                    text='编辑',
+                                                    data=memo,
+                                                    on_click=self.on_edit_content
+                                                ),
+                                                Divider(),
+                                                PopupMenuItem(
+                                                    icon=Icons.DELETE,
+                                                    text='删除',
+                                                    data=memo,
+                                                    on_click=self.on_delete_memo
+                                                )
+                                            ],
+                                            # icon_color=Colors.WHITE,
+                                        )
+                                    ]
+                                ),
+                                Text(
+                                    value=memo.get('content'),
+                                    size=15,
+                                    no_wrap=False,
+                                    color=Colors.BLACK87
+                                ),
+                            ],
+                        ),
+                    )
+                    self.note_list.controls.append(memo_item)
+                self.progress_bar.visible = False
+                self.page.update()
+        except httpx.HTTPError as e:
+            snack_bar = SnackBar(Text(f"查询用户备忘列表请求失败，请刷新重试。{str(e)}"))
+            self.page.overlay.append(snack_bar)
+            snack_bar.open = True
+            self.progress_bar.visible = False
+            self.page.update()
+
+    def on_copy_content(self, e):
+        memo_info = e.control.data
+        self.page.set_clipboard(memo_info.get('content'))
+
+    def on_delete_memo(self, e):
+        memo_info = e.control.data
+        self.page.run_task(self.delete_memo, memo_info, e)
+
+    def on_edit_content(self, e):
+        memo_data = e.control.data
+        self.page.controls.clear()
+        from memo_editor_view import MemoEditorView
+        page_view = SafeArea(
+            MemoEditorView(self.page, memo_data),
+            adaptive=True,
+            expand=True
+        )
+        self.page.controls.append(page_view)
+        self.page.update()
+
+    async def delete_memo(self, memo_info, e):
+        token = await self.page.client_storage.get_async('token')
+        memo_id = memo_info.get("id")
+        url = f'https://restapi.10qu.com.cn/memo/{memo_id}/'
+        headers = {"Authorization": f'Bearer {token}'}
+        try:
+            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+                resp = await client.delete(
+                    url,
+                    headers=headers,
+                )
+                resp.raise_for_status()
+                if resp.status_code != 204:
+                    snack_bar = SnackBar(Text("删除备忘失败!"))
+                    e.control.page.overlay.append(snack_bar)
+                    snack_bar.open = True
+                    e.control.page.update()
+                    return
+        except httpx.HTTPError as ex:
+            snack_bar = SnackBar(Text(f"删除备忘失败:{str(ex)}"))
+            e.control.page.overlay.append(snack_bar)
+            snack_bar.open = True
+            e.control.page.update()
+            return
+
+    def on_fab_pressed(self, e):
+        async def on_btn_post_clicked(ex):
+            # 关闭BottomSheet
+            bs.open = False
+            ex.page.overlay.clear()
+            ex.control.update()
+            ex.control.page.update()
+
+            # 提交任务
+            content = input_memo.value
+            if len(content) == 0:
+                snack_bar = SnackBar(Text("备忘信息不允许为空!"))
+                e.control.page.overlay.append(snack_bar)
+                snack_bar.open = True
+                e.control.page.update()
+                return
+            token = await self.page.client_storage.get_async('token')
+            user_id = await self.page.client_storage.get_async('user_id')
+            url = 'https://restapi.10qu.com.cn/memo/'
+            headers = {'Authorization': f'Bearer {token}'}
+            user_input = {'user': user_id,
+                          'content': content}
+            progress_ring = ProgressRing(width=32, height=32, stroke_width=2)
+            progress_ring.top = self.page.height / 2 - progress_ring.height / 2
+            progress_ring.left = self.page.width / 2 - progress_ring.width / 2
+            e.control.page.overlay.append(progress_ring)
+            e.control.page.update()
+            try:
+                async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+                    resp = await client.post(
+                        url,
+                        headers=headers,
+                        json=user_input,
+                    )
+                    resp.raise_for_status()
+                    if resp.status_code != 201:
+                        snack_bar = SnackBar(Text("添加备忘失败!"))
+                        e.control.page.overlay.append(snack_bar)
+                        snack_bar.open = True
+                        progress_ring.visible = False
+                        e.control.page.update()
+                        return
+                    snack_bar = SnackBar(Text("备忘添加成功!"))
+                    e.control.page.overlay.append(snack_bar)
+                    snack_bar.open = True
+                    e.control.update()
+                    e.control.page.update()
+
+                    # 更新列表
+                    await self.query_memos_list()
+            except httpx.HTTPError as ex:
+                snack_bar = SnackBar(Text(f"任务添加异常：{str(ex)}"))
+                self.page.overlay.append(snack_bar)
+                snack_bar.open = True
+                self.page.update()
+            progress_ring.visible = False
+            e.control.page.update()
+            self.page.update()
+
+        def on_select_memo_tag(ex):
+            pass
+
+        input_memo = TextField(
+            hint_text='现在您的想法是...',
+            label='任何想法',
+            expand=True,
+            filled=True,
+            multiline=True,
+            border=InputBorder.OUTLINE,
+            border_radius=5,
+            # height=120,
+            autofocus=True,
+            adaptive=True,
+        )
+        btn_tag = PopupMenuButton(
+            icon=Icons.TAG_OUTLINED,
+            content=Row([
+                Icon(name=Icons.TAG_OUTLINED),
+                # Text('截止日期')
+            ]),
+            items=[
+                PopupMenuItem(text='今天', icon=Icons.CALENDAR_TODAY_OUTLINED),
+                PopupMenuItem(text='明天', icon=Icons.CALENDAR_VIEW_DAY_OUTLINED),
+                PopupMenuItem(text='下周一', icon=Icons.CALENDAR_VIEW_WEEK_OUTLINED),
+            ],
+            on_select=on_select_memo_tag
+        )
+        btn_post = IconButton(
+            icon=Icons.SEND_OUTLINED,
+            on_click=on_btn_post_clicked
+        )
+        row_extra = Row(
+            controls=[
+                btn_tag,
+                Container(expand=True),
+                btn_post
+            ],
+            alignment=MainAxisAlignment.SPACE_BETWEEN
+        )
+
+        bs = BottomSheet(
+            Container(
+                Column(
+                    [
+                        input_memo, row_extra
+                    ],
+                    horizontal_alignment=CrossAxisAlignment.CENTER,
+                    tight=True,
+                ),
+                adaptive=True,
+                border_radius=2,
+                padding=15,
+                expand=True
+            ),
+            use_safe_area=True,
+            open=True,
+        )
+        e.page.overlay.append(bs)
+        e.control.update()
+        e.control.page.update()
+
+    async def on_button_refresh_click(self, e):
+        # self.page.run_task(self.query_diary_list)
+        await self.query_memos_list(append_mode='restart', tag_id=None)
+
+    def on_button_search_click(self, e):
+        self.page.controls.clear()
+        from search_memo_view import SearchMemoView
+        page_view = SafeArea(
+            SearchMemoView(self.page),
+            adaptive=True,
+            expand=True
+        )
+        self.page.controls.append(page_view)
+        self.page.update()
+
+    def on_memo_item_click(self, e):
+        memo_data = e.control.data
+        self.page.controls.clear()
+        from memo_editor_view import MemoEditorView
+        page_view = SafeArea(
+            MemoEditorView(self.page, memo_data),
+            adaptive=True,
+            expand=True
+        )
+        self.page.controls.append(page_view)
+        self.page.update()
+
+    def on_about_click(self, e):
+        self.page.dialog = self.dlg_about
+        self.dlg_about.open = True
+        self.page.update()
+
+    def on_about_ok_click(self, e):
+        self.dlg_about.open = False
+        self.page.update()
+
+    async def on_logout(self, e):
+        url = 'https://restapi.10qu.com.cn/logout/'
+        token = await self.page.client_storage.get_async('token')
+        headers = {"Authorization": f'Bearer {token}'}
+        progress_ring = ProgressRing(width=32, height=32, stroke_width=2)
+        progress_ring.top = self.page.height / 2 - progress_ring.height / 2
+        progress_ring.left = self.page.width / 2 - progress_ring.width / 2
+        e.control.page.overlay.append(progress_ring)
+        e.control.page.update()
+        try:
+            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+                resp = await client.get(
+                    url,
+                    headers=headers,
+                )
+                resp.raise_for_status()
+                if resp.status_code != 200:
+                    snack_bar = SnackBar(Text("退出登录失败，请稍后重新再试。"))
+                    e.control.page.overlay.append(snack_bar)
+                    snack_bar.open = True
+                    progress_ring.visible = False
+                    e.control.page.update()
+                    return
+                data = resp.json()
+                if data.get('code') != '0':
+                    snack_bar = SnackBar(Text("退出登录失败，请稍后重新再试。"))
+                    e.control.page.overlay.append(snack_bar)
+                    snack_bar.open = True
+                    progress_ring.visible = False
+                    e.control.page.update()
+                    return
+        except httpx.HTTPError as ex:
+            snack_bar = SnackBar(Text(f"退出登录失败:{str(ex)}"))
+            e.control.page.overlay.append(snack_bar)
+            snack_bar.open = True
+            progress_ring.visible = False
+            e.control.page.update()
+        progress_ring.visible = False
+        # 跳转至登录界面
+        await self.page.client_storage.clear_async()
+        from login_view import LoginControl
+        page_view = SafeArea(
+            LoginControl(self.page),
+            adaptive=True,
+            expand=True
+        )
+        self.page.controls.clear()
+        self.page.controls.append(page_view)
+        self.page.update()
+
+    def open_drawer(self, e):
+        if self.page:
+            if self.drawer not in self.page.controls:
+                pass
+            self.drawer.open = True
+            self.page.update()
+
+    async def on_query_all_memo_click(self, e):
+        self.page.drawer.open = False
+        self.page.update()
+        await self.query_memos_list(append_mode='restart', tag_id=None)
+
+    async def on_query_memo_tag_click(self, e):
+        tag_info = e.control.data
+        tag_id = tag_info.get('id')
+        self.page.drawer.open = False
+        self.page.update()
+        await self.query_memos_list(append_mode='restart', tag_id=tag_id)
+
+    async def get_memo_tag_list(self) -> list|None:
+        cached_memo_tag_list_value = await self.page.client_storage.get_async('memo_tag_list')
+        cached_memo_tag_list = json.loads(cached_memo_tag_list_value) if cached_memo_tag_list_value else []
+        if cached_memo_tag_list:
+            return cached_memo_tag_list
+        user_id = await self.page.client_storage.get_async('user_id')
+        token = await self.page.client_storage.get_async('token')
+        url = f'https://restapi.10qu.com.cn/note_tag/?user={user_id}'
+        headers = {"Authorization": f'Bearer {token}'}
+        try:
+            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+                resp = await client.get(
+                    url,
+                    headers=headers,
+                    follow_redirects=True)
+                resp.raise_for_status()
+                if resp.status_code != 200:
+                    return None
+                data = resp.json()
+                lst_category = data.get('results')
+                cached_memo_tag_list_str = json.dumps(lst_category)
+                await self.page.client_storage.set_async('memo_tag_list', cached_memo_tag_list_str)
+                return lst_category
+        except httpx.HTTPError as e:
+            snack_bar = SnackBar(Text(f"查询备忘标签请求失败:{str(e)}"))
+            self.page.overlay.append(snack_bar)
+            snack_bar.open = True
+            self.page.update()
+
+    async def load_more(self):
+        self.loading = True
+
+        self.page_idx += 1
+        await self.query_memos_list(append_mode='append', tag_id=None)
+
+        snack_bar = SnackBar(Text(f"第{self.page_idx}页加载完成。"))
+        self.page.overlay.append(snack_bar)
+        snack_bar.open = True
+        self.progress_bar.visible = False
+        self.loading = False
+        self.page.update()
+
+    def on_list_view_scroll(self, e: OnScrollEvent):
+        # e.pixels: 当前滚动条位置
+        # e.max_scroll_extent: 最大滚动位置
+        if e.pixels >= e.max_scroll_extent - 50 and not self.loading:
+            # 距离底部小于50像素时触发加载
+            self.page.run_task(self.load_more)
+
+    async def build_drawer(self):
+        cached_user_info_value = await self.page.client_storage.get_async('diary_user_info')
+        cached_user_info = json.loads(cached_user_info_value) if cached_user_info_value else {}
+        if cached_user_info:
+            avatar_url = cached_user_info.get('avatar_url', 'assets/default_avatar.png')
+            nick_name = cached_user_info.get('nick_name', '用户名')
+        else:
+            token = await self.page.client_storage.get_async('token')
+            url='https://restapi.10qu.com.cn/user_info/'
+            headers = {'Authorization': f'Bearer {token}'}
+            try:
+                async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+                    resp = await client.get(
+                        url,
+                        headers=headers,
+                    )
+                    resp.raise_for_status()
+                    if resp.status_code != 200:
+                        snack_bar = SnackBar(Text("获取用户信息失败."))
+                        self.page.overlay.append(snack_bar)
+                        snack_bar.open = True
+                        avatar_url = 'assets/default_avatar.png'
+                        nick_name = '未知'
+                        self.page.update()
+                    else:
+                        data = resp.json()
+                        user_info = data.get('results')
+                        avatar_url = user_info.get('avatar_url', 'assets/default_avatar.png')
+                        nick_name = user_info.get('nick_name', '')
+                        cached_user_info_str = json.dumps(user_info)
+                        await self.page.client_storage.set_async('dairy_user_info', cached_user_info_str)
+            except httpx.HTTPError as ex:
+                snack_bar = SnackBar(Text(f"获取用户信息失败：{str(ex)}"))
+                self.page.overlay.append(snack_bar)
+                snack_bar.open = True
+                avatar_url = 'assets/default_avatar.png'
+                nick_name = '未知'
+                self.page.update()
+
+        text_user = Text(
+            nick_name,
+            size=14,
+            color=Colors.WHITE
+        )
+        img_avatar = Image(
+            src=avatar_url,
+            width=32,
+            height=32,
+            fit=ImageFit.CONTAIN,
+            border_radius=border_radius.all(30)
+        )
+
+        head = Container(
+            content=Row(
+                controls=[img_avatar,
+                          text_user],
+                alignment=MainAxisAlignment.SPACE_AROUND,
+                # vertical_alignment=CrossAxisAlignment.CENTER,
+                # spacing=10
+            ),
+            bgcolor=Colors.BLUE_600,
+            height=100,
+            alignment=alignment.center_left,
+            adaptive=True,
+        )
+        # 获得日记类型列表
+        lst_category = await self.get_memo_tag_list()
+        cate_list_tiles = [
+            head,
+            ListTile(title=Text('全部备忘'),
+                     selected=self.selected_idx == 0,
+                     selected_tile_color=Colors.BLUE_100,
+                     hover_color=Colors.BLUE_50,
+                     leading=Icon(Icons.ALL_INBOX),
+                     on_click=self.on_query_all_memo_click,
+                     ),
+        ]
+        col_drawer = Column(
+            controls=cate_list_tiles
+            # alignment=MainAxisAlignment.START,
+        )
+
+        for cate in lst_category:
+            col_drawer.controls.append(
+                ListTile(
+                    title=Text(cate.get('name')),
+                    leading=Icon(Icons.TAG_OUTLINED),
+                    selected_tile_color=Colors.BLUE_100,
+                    hover_color=Colors.BLUE_50,
+                    data=cate,
+                    on_click=self.on_query_memo_tag_click,
+                )
+            )
+        col_drawer.controls.append(Container(expand=True))
+        col_drawer.controls.append(
+            Divider(
+                thickness=1,
+                color=Colors.GREY_200,
+            )
+        )
+        col_drawer.controls.append(ListTile(title=Text('关于我们'),
+                         leading=Icon(Icons.HELP),
+                         on_click=self.on_about_click,
+                         ))
+        col_drawer.controls.append(
+            ListTile(
+                title=Text('退出登录'),
+                leading=Icon(Icons.EXIT_TO_APP),
+                on_click=self.on_logout,
+            )
+        )
+        # return col_drawer
+        self.drawer = NavigationDrawer(
+            position=NavigationDrawerPosition.START,
+            open=False,
+            controls=[
+                Container(
+                    content=col_drawer,
+                    expand=1,
+                    padding=0,
+                    margin=0,
+                )
+            ]
+        )
+        self.page.drawer = self.drawer
+        self.page.update()
+
+    def build_interface(self):
+        # 笔记列表
+        self.note_list = ListView(
+            spacing=10,
+            padding=padding.only(left=2, top=5, right=2, bottom=5),
+            expand=True,
+            # height=self.page.height - 10,
+            # on_scroll= self.on_list_view_scroll,
+        )
+
+        self.progress_bar = ProgressBar(
+            value=None,
+            bar_height=3,
+            bgcolor=Colors.GREY_100,
+            color=Colors.GREY_300,
+            width=self.page.width
+        )
+
+        col_notes = Column(
+            controls = [
+                self.progress_bar,
+                self.note_list,
+            ],
+            alignment=MainAxisAlignment.SPACE_BETWEEN,
+            horizontal_alignment=CrossAxisAlignment.START,
+            adaptive=True,
+            width=self.page.width,
+            spacing=0,
+            tight=True,
+        )
+        return col_notes
