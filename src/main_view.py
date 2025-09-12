@@ -71,14 +71,14 @@ class MainView(Column):
 
         # 浮动按钮
         self.page.floating_action_button = FloatingActionButton(
-            icon=Icons.ADD,
+            icon=Icons.CREATE,
             bgcolor=Colors.BLUE,
             foreground_color=Colors.WHITE,
             shape=RoundedRectangleBorder(radius=50),
             data=0,
             on_click=self.on_fab_pressed,
         )
-        self.page.floating_action_button_location = FloatingActionButtonLocation.CENTER_FLOAT
+        # self.page.floating_action_button_location = FloatingActionButtonLocation.CENTER_FLOAT
 
         # self.btn_previous_page = IconButton(
         #     icon=Icons.ARROW_LEFT,
@@ -140,7 +140,7 @@ class MainView(Column):
         token = await self.page.client_storage.get_async('token')
         user_id = await self.page.client_storage.get_async('user_id')
         if not tag_id:
-            url = f'https://restapi.10qu.com.cn/memo/?user={user_id}&ordering=-create_time'
+            url = f'https://restapi.10qu.com.cn/memo/?user={user_id}&ordering=-create_time&page={self.page_idx}&size=30'
         else:
             url = f'https://restapi.10qu.com.cn/memo/?user={user_id}&tag={tag_id}'
         headers = {"Authorization": f'Bearer {token}'}
@@ -220,6 +220,16 @@ class MainView(Column):
                         ),
                     )
                     self.note_list.controls.append(memo_item)
+                if len(lst_memo) == 30:
+                    self.btn_load_more.visible = True
+                    # self.note_list.controls.append(
+                    #     IconButton(
+                    #         icon=Icons.ARROW_DOWNWARD_OUTLINED,
+                    #         on_click=self.load_next_page,
+                    #     )
+                    # )
+                else:
+                    self.btn_load_more.visible = False
                 self.progress_bar.visible = False
                 self.page.update()
         except httpx.HTTPError as e:
@@ -549,6 +559,9 @@ class MainView(Column):
             snack_bar.open = True
             self.page.update()
 
+    def load_next_page(self, e):
+        self.page.run_task(self.load_more)
+
     async def load_more(self):
         self.loading = True
 
@@ -713,14 +726,19 @@ class MainView(Column):
             color=Colors.GREY_300,
             width=self.page.width
         )
-
+        self.btn_load_more = IconButton(
+            icon=Icons.ARROW_DOWNWARD_OUTLINED,
+            on_click=self.load_next_page,
+            visible=False,
+        )
         col_notes = Column(
             controls = [
                 self.progress_bar,
                 self.note_list,
+                self.btn_load_more,
             ],
             alignment=MainAxisAlignment.SPACE_BETWEEN,
-            horizontal_alignment=CrossAxisAlignment.START,
+            horizontal_alignment=CrossAxisAlignment.CENTER,
             adaptive=True,
             width=self.page.width,
             spacing=0,
