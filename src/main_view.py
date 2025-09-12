@@ -171,6 +171,8 @@ class MainView(Column):
                                          color=Colors.WHITE, offset=(2, 2)),
                         content=Column(
                             expand=True,
+                            alignment=MainAxisAlignment.START,
+                            spacing=0,
                             controls=[
                                 Row(
                                     alignment=MainAxisAlignment.SPACE_BETWEEN,
@@ -276,9 +278,11 @@ class MainView(Column):
         async def on_btn_post_clicked(ex):
             # 关闭BottomSheet
             bs.open = False
-            ex.page.overlay.clear()
-            ex.control.update()
-            ex.control.page.update()
+            # ex.page.overlay.clear()
+            # ex.control.update()
+            # ex.control.page.update()
+            self.page.overlay.clear()
+            self.page.update()
 
             # 提交任务
             content = input_memo.value
@@ -348,12 +352,18 @@ class MainView(Column):
             expand=True,
             # filled=True,
             multiline=True,
-            # border=InputBorder.OUTLINE,
+            border=InputBorder.OUTLINE,
             # border_radius=5,
             # height=120,
             # autofocus=True,
-            # adaptive=True,
+            adaptive=True,
+            min_lines=14,
         )
+        # input_container = Container(
+        #     content=input_memo,
+        #     expand=True,
+        #     # height=240,
+        # )
         tag_list_items = []
         tag_list = await self.get_memo_tag_list()
         for tag in tag_list:
@@ -391,22 +401,26 @@ class MainView(Column):
             Container(
                 Column(
                     [
-                        input_memo, row_extra
+                        row_extra,
+                        input_memo,
                     ],
                     horizontal_alignment=CrossAxisAlignment.CENTER,
                     tight=True,
                 ),
                 adaptive=True,
                 border_radius=2,
-                padding=15,
-                expand=True
+                padding=10,
+                # expand=True,
             ),
-            use_safe_area=True,
+            # use_safe_area=True,
+            maintain_bottom_view_insets_padding=True,
             open=True,
         )
-        e.page.overlay.append(bs)
-        e.control.update()
-        e.control.page.update()
+        # e.page.overlay.append(bs)
+        # e.control.update()
+        # e.control.page.update()
+        self.page.overlay.append(bs)
+        self.page.update()
 
     async def on_button_refresh_click(self, e):
         # self.page.run_task(self.query_diary_list)

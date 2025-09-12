@@ -132,41 +132,42 @@ class MemoEditorView(Column):
 
     async def on_button_save_click(self, e):
         str_content = self.editor.value
-        self.progress_bar.visible = True
-        self.page.update()
-        token = await self.page.client_storage.get_async('token')
-        user_id = await self.page.client_storage.get_async('user_id')
-        user_input = {'user': user_id,
-                      'content': str_content}
-        headers = {"Authorization": f'Bearer {token}'}
-        if self.memo_info is None:
-            return
-        url = f'https://restapi.10qu.com.cn/memo/{self.memo_info.get("id")}/'
-        try:
-            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
-                resp = await client.put(
-                    url,
-                    headers=headers,
-                    json=user_input,
-                )
-                resp.raise_for_status()
-                if resp.status_code != 200:
-                    snack_bar = SnackBar(Text("备忘更新失败!"))
-                    e.control.page.overlay.append(snack_bar)
-                    snack_bar.open = True
-                    e.control.page.update()
-                    return
-        except httpx.HTTPError as ex:
-            snack_bar = SnackBar(Text(f"更新备忘失败:{str(ex)}"))
-            e.control.page.overlay.append(snack_bar)
-            snack_bar.open = True
-            e.control.page.update()
+        if str_content != self.memo_info.get("content"):
+            self.progress_bar.visible = True
+            self.page.update()
+            token = await self.page.client_storage.get_async('token')
+            user_id = await self.page.client_storage.get_async('user_id')
+            user_input = {'user': user_id,
+                          'content': str_content}
+            headers = {"Authorization": f'Bearer {token}'}
+            if self.memo_info is None:
+                return
+            url = f'https://restapi.10qu.com.cn/memo/{self.memo_info.get("id")}/'
+            try:
+                async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+                    resp = await client.put(
+                        url,
+                        headers=headers,
+                        json=user_input,
+                    )
+                    resp.raise_for_status()
+                    if resp.status_code != 200:
+                        snack_bar = SnackBar(Text("备忘更新失败!"))
+                        e.control.page.overlay.append(snack_bar)
+                        snack_bar.open = True
+                        e.control.page.update()
+                        return
+            except httpx.HTTPError as ex:
+                snack_bar = SnackBar(Text(f"更新备忘失败:{str(ex)}"))
+                e.control.page.overlay.append(snack_bar)
+                snack_bar.open = True
+                e.control.page.update()
+                self.progress_bar.visible = False
+                self.page.update()
+                return
+
             self.progress_bar.visible = False
             self.page.update()
-            return
-
-        self.progress_bar.visible = False
-        self.page.update()
 
         # 跳转至主页面
         self.page.controls.clear()
