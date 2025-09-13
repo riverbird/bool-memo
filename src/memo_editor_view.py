@@ -5,6 +5,7 @@ from flet.core.app_bar import AppBar
 from flet.core.colors import Colors
 from flet.core.column import Column
 from flet.core.container import Container
+from flet.core.divider import Divider
 from flet.core.icon_button import IconButton
 from flet.core.icons import Icons
 from flet.core.popup_menu_button import PopupMenuButton, PopupMenuItem
@@ -34,6 +35,12 @@ class MemoEditorView(Column):
                     text='复制全文',
                     on_click=self.on_copy_content
                 ),
+                PopupMenuItem(
+                    icon=Icons.STAR,
+                    text='收藏',
+                    on_click=self.on_star_memo
+                ),
+                Divider(),
                 PopupMenuItem(
                     icon=Icons.DELETE,
                     text='删除',
@@ -91,6 +98,9 @@ class MemoEditorView(Column):
         content = self.editor.value
         self.page.set_clipboard(content)
 
+    def on_star_memo(self, e):
+        self.page.run_task(self.star_memo, e)
+
     def on_delete_memo(self, e):
         self.page.run_task(self.delete_memo, e)
 
@@ -129,6 +139,38 @@ class MemoEditorView(Column):
         )
         self.page.controls.append(page_view)
         self.page.update()
+
+    async def star_memo(self, e):
+        token = await self.page.client_storage.get_async('token')
+        headers = {"Authorization": f'Bearer {token}'}
+        user_input = {'star': True}
+        url = f'https://restapi.10qu.com.cn/memo/{self.memo_info.get("id")}/'
+        try:
+            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+                resp = await client.patch(
+                    url,
+                    headers=headers,
+                    json=user_input,
+                )
+                resp.raise_for_status()
+                if resp.status_code != 200:
+                    snack_bar = SnackBar(Text(f"修改备忘收藏状态失败."))
+                    e.control.page.overlay.append(snack_bar)
+                    snack_bar.open = True
+                    e.control.page.update()
+                    return
+                update_result = resp.json()
+        except httpx.HTTPError as ex:
+            snack_bar = SnackBar(Text(f"修改备忘收藏状态失败:{str(ex)}"))
+            e.control.page.overlay.append(snack_bar)
+            snack_bar.open = True
+            e.control.page.update()
+            return
+        update_result_text = '成功' if update_result else '失败'
+        snack_bar = SnackBar(Text(f"修改备忘收藏状态{update_result_text}!"))
+        e.control.page.overlay.append(snack_bar)
+        snack_bar.open = True
+        e.control.page.update()
 
     async def on_button_save_click(self, e):
         str_content = self.editor.value

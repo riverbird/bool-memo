@@ -23,6 +23,7 @@ from flet.core.icon_button import IconButton
 from flet.core.image import Image
 from flet.core.list_tile import ListTile
 from flet.core.list_view import ListView
+from flet.core.markdown import Markdown
 from flet.core.navigation_drawer import NavigationDrawer, NavigationDrawerPosition
 from flet.core.popup_menu_button import PopupMenuButton, PopupMenuItem
 from flet.core.progress_bar import ProgressBar
@@ -55,6 +56,7 @@ class MainView(Column):
             content=Column(
                 controls=[Divider(height=1, color='gray'),
                           Text('布尔备忘v0.1.0'),
+                          Text('一个快速的备忘记录软件，支持Markdown。'),
                           Text('浙江舒博特网络科技有限公司 出品'),
                           Text('官网: http://https://www.zjsbt.cn/service/derivatives'),
                           ],
@@ -108,10 +110,12 @@ class MainView(Column):
             self.note_list.controls.clear()
         token = await self.page.client_storage.get_async('token')
         user_id = await self.page.client_storage.get_async('user_id')
-        if not tag_id:
-            url = f'https://restapi.10qu.com.cn/memo/?user={user_id}&ordering=-create_time&page={self.page_idx}&size=30'
-        else:
+        if tag_id == 'star':
+            url = f'https://restapi.10qu.com.cn/memo/?user={user_id}&star=true&ordering=-create_time'
+        elif isinstance(tag_id, int):
             url = f'https://restapi.10qu.com.cn/memo/?user={user_id}&tag={tag_id}'
+        else:
+            url = f'https://restapi.10qu.com.cn/memo/?user={user_id}&ordering=-create_time&page={self.page_idx}&size=30'
         headers = {"Authorization": f'Bearer {token}'}
         try:
             async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
@@ -162,6 +166,12 @@ class MainView(Column):
                                                     on_click=self.on_copy_content
                                                 ),
                                                 PopupMenuItem(
+                                                    icon=Icons.STAR,
+                                                    text='收藏',
+                                                    data=memo,
+                                                    on_click=self.on_star_memo
+                                                ),
+                                                PopupMenuItem(
                                                     icon=Icons.EDIT_OUTLINED,
                                                     text='编辑',
                                                     data=memo,
@@ -179,11 +189,14 @@ class MainView(Column):
                                         )
                                     ]
                                 ),
-                                Text(
+                                # Text(
+                                #     value=memo.get('content'),
+                                #     size=15,
+                                #     no_wrap=False,
+                                #     color=Colors.BLACK87
+                                # ),
+                                Markdown(
                                     value=memo.get('content'),
-                                    size=15,
-                                    no_wrap=False,
-                                    color=Colors.BLACK87
                                 ),
                             ],
                         ),
@@ -205,6 +218,39 @@ class MainView(Column):
     def on_copy_content(self, e):
         memo_info = e.control.data
         self.page.set_clipboard(memo_info.get('content'))
+
+    async def on_star_memo(self, e):
+        memo_info = e.control.data
+        token = await self.page.client_storage.get_async('token')
+        headers = {"Authorization": f'Bearer {token}'}
+        user_input = {'star': True}
+        url = f'https://restapi.10qu.com.cn/memo/{memo_info.get("id")}/'
+        try:
+            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+                resp = await client.patch(
+                    url,
+                    headers=headers,
+                    json=user_input,
+                )
+                resp.raise_for_status()
+                if resp.status_code != 200:
+                    snack_bar = SnackBar(Text(f"修改备忘收藏状态失败."))
+                    e.control.page.overlay.append(snack_bar)
+                    snack_bar.open = True
+                    e.control.page.update()
+                    return
+                update_result = resp.json()
+        except httpx.HTTPError as ex:
+            snack_bar = SnackBar(Text(f"修改备忘收藏状态失败:{str(ex)}"))
+            e.control.page.overlay.append(snack_bar)
+            snack_bar.open = True
+            e.control.page.update()
+            return
+        update_result_text = '成功' if update_result else '失败'
+        snack_bar = SnackBar(Text(f"修改备忘收藏状态{update_result_text}!"))
+        e.control.page.overlay.append(snack_bar)
+        snack_bar.open = True
+        e.control.page.update()
 
     def on_delete_memo(self, e):
         memo_info = e.control.data
@@ -487,6 +533,11 @@ class MainView(Column):
         self.page.update()
         await self.query_memos_list(append_mode='restart', tag_id=None)
 
+    async def on_query_star_memo_click(self, e):
+        self.page.drawer.open = False
+        self.page.update()
+        await self.query_memos_list(append_mode='restart', tag_id='star')
+
     async def on_query_memo_tag_click(self, e):
         tag_info = e.control.data
         tag_id = tag_info.get('id')
@@ -620,19 +671,31 @@ class MainView(Column):
         lst_category = await self.get_memo_tag_list()
         cate_list_tiles = [
             head,
-            ListTile(title=Text('全部备忘'),
-                     selected=self.selected_idx == 0,
-                     selected_tile_color=Colors.BLUE_100,
-                     hover_color=Colors.BLUE_50,
-                     leading=Icon(Icons.ALL_INBOX),
-                     on_click=self.on_query_all_memo_click,
-                     ),
+            ListTile(
+                title=Text('全部备忘'),
+                selected=self.selected_idx == 0,
+                selected_tile_color=Colors.BLUE_100,
+                hover_color=Colors.BLUE_50,
+                leading=Icon(Icons.ALL_INBOX),
+                on_click=self.on_query_all_memo_click,
+            ),
+            ListTile(
+                title=Text('已收藏'),
+                selected=self.selected_idx == 0,
+                selected_tile_color=Colors.BLUE_100,
+                hover_color=Colors.BLUE_50,
+                leading=Icon(Icons.STAR),
+                on_click=self.on_query_star_memo_click,
+            ),
         ]
         col_drawer = Column(
             controls=cate_list_tiles
             # alignment=MainAxisAlignment.START,
         )
-
+        if lst_category:
+            col_drawer.controls.append(
+                Divider()
+            )
         for cate in lst_category:
             col_drawer.controls.append(
                 ListTile(
