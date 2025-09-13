@@ -79,24 +79,11 @@ class MainView(Column):
             on_click=self.on_fab_pressed,
         )
         # self.page.floating_action_button_location = FloatingActionButtonLocation.CENTER_FLOAT
-
-        # self.btn_previous_page = IconButton(
-        #     icon=Icons.ARROW_LEFT,
-        #     on_click=self.on_previous_page,
-        #     disabled=True,
-        # )
-        # self.btn_next_page = IconButton(
-        #     icon=Icons.ARROW_RIGHT,
-        #     on_click=self.on_next_page,
-        #     disabled=False,
-        # )
         self.page.appbar = AppBar(
             title=Text('布尔备忘', color=Colors.BLACK),
             bgcolor=Colors.WHITE,
             color=Colors.BLACK,
             actions=[
-                # self.btn_previous_page,
-                # self.btn_next_page,
                 IconButton(
                     icon=Icons.SEARCH,
                     on_click=self.on_button_search_click
@@ -113,24 +100,6 @@ class MainView(Column):
         self.page.bottom_appbar = None
         self.controls = [content, self.dlg_about]
         self.page.run_task(self.query_memos_list)
-
-    async def on_previous_page(self, e):
-        if self.page_idx > 2:
-            self.page_idx -= 1
-            # self.btn_previous_page.disabled = False
-            self.page.appbar.update()
-        else:
-            self.page_idx = 1
-            # self.btn_previous_page.disabled = True
-            self.page.appbar.update()
-        await self.query_memos_list(append_mode='restart', tag_id=None)
-
-    async def on_next_page(self, e):
-        self.page_idx += 1
-        # self.btn_previous_page.disabled = False
-        self.page.appbar.update()
-        await self.query_memos_list(append_mode='restart', tag_id=None)
-
 
     async def query_memos_list(self, append_mode='restart', tag_id=None):
         self.progress_bar.visible = True
@@ -222,12 +191,6 @@ class MainView(Column):
                     self.note_list.controls.append(memo_item)
                 if len(lst_memo) == 30:
                     self.btn_load_more.visible = True
-                    # self.note_list.controls.append(
-                    #     IconButton(
-                    #         icon=Icons.ARROW_DOWNWARD_OUTLINED,
-                    #         on_click=self.load_next_page,
-                    #     )
-                    # )
                 else:
                     self.btn_load_more.visible = False
                 self.progress_bar.visible = False
@@ -434,6 +397,7 @@ class MainView(Column):
 
     async def on_button_refresh_click(self, e):
         # self.page.run_task(self.query_diary_list)
+        self.page_idx = 1
         await self.query_memos_list(append_mode='restart', tag_id=None)
 
     def on_button_search_click(self, e):
@@ -564,6 +528,9 @@ class MainView(Column):
 
     async def load_more(self):
         self.loading = True
+        self.progress_bar.visible = True
+        self.btn_load_more.visible = False
+        self.progress_ring.visible = True
 
         self.page_idx += 1
         await self.query_memos_list(append_mode='append', tag_id=None)
@@ -572,6 +539,8 @@ class MainView(Column):
         self.page.overlay.append(snack_bar)
         snack_bar.open = True
         self.progress_bar.visible = False
+        self.btn_load_more.visible = True
+        self.progress_ring.visible = False
         self.loading = False
         self.page.update()
 
@@ -731,11 +700,18 @@ class MainView(Column):
             on_click=self.load_next_page,
             visible=False,
         )
+        self.progress_ring = ProgressRing(
+            width=28,
+            height=28,
+            visible=False,
+        )
+
         col_notes = Column(
             controls = [
                 self.progress_bar,
                 self.note_list,
-                self.btn_load_more,
+                Row([self.btn_load_more, self.progress_ring],
+                    alignment=MainAxisAlignment.CENTER)
             ],
             alignment=MainAxisAlignment.SPACE_BETWEEN,
             horizontal_alignment=CrossAxisAlignment.CENTER,
