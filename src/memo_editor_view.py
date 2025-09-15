@@ -1,5 +1,7 @@
 # coding:utf-8
 import json
+from asyncio import Future
+
 import httpx
 from flet.core.app_bar import AppBar
 from flet.core.colors import Colors
@@ -8,6 +10,7 @@ from flet.core.container import Container
 from flet.core.divider import Divider
 from flet.core.icon_button import IconButton
 from flet.core.icons import Icons
+from flet.core.outlined_button import OutlinedButton
 from flet.core.popup_menu_button import PopupMenuButton, PopupMenuItem
 from flet.core.progress_bar import ProgressBar
 from flet.core.row import Row
@@ -93,6 +96,37 @@ class MemoEditorView(Column):
             snack_bar.open = True
             self.page.update()
         return []
+
+    def handle_memo_tag_list(self, t:Future[list]):
+        try:
+            res = t.result()
+        except Exception as ex:
+            snack_bar = SnackBar(Text(f"获取备忘标签请求失败:{str(ex)}"))
+            self.page.overlay.append(snack_bar)
+            snack_bar.open = True
+            self.progress_bar.visible = False
+            self.page.update()
+        else:
+            lst_tags = res
+            self.row_labels.controls.clear()
+            for tag in lst_tags:
+                if tag.get('id') in self.memo_info.get('tag'):
+                    self.row_labels.controls.append(
+                        OutlinedButton(
+                            text=tag.get('name'),
+                            icon=Icons.TAG,
+                            tooltip='标签',
+                        ),
+                    )
+            self.row_labels.controls.append(
+                OutlinedButton(
+                    text='标签',
+                    icon=Icons.ADD,
+                    tooltip='添加标签',
+                    on_click=self.on_button_add_label
+                ),
+            )
+            self.page.update()
 
     def on_copy_content(self, e):
         content = self.editor.value
@@ -239,6 +273,17 @@ class MemoEditorView(Column):
         self.page.controls.append(page_view)
         self.page.update()
 
+    def on_button_add_label(self, e):
+        self.page.controls.clear()
+        from select_tag_view import SelectTagView
+        page_view = SafeArea(
+            SelectTagView(self.page, self.memo_info),
+            adaptive=True,
+            expand=True
+        )
+        self.page.controls.append(page_view)
+        self.page.update()
+
     def build_interface(self):
         # 操作栏
         row_ops = Row(
@@ -260,6 +305,23 @@ class MemoEditorView(Column):
         self.ops_toolbar = Container(
             content= row_ops,
         )
+        # 标签
+        self.row_labels = Row(
+            alignment=MainAxisAlignment.START,
+            spacing=0,
+            wrap=True,
+            controls=[
+                # OutlinedButton(
+                #     text='标签',
+                #     icon=Icons.ADD,
+                #     tooltip='添加标签',
+                #     on_click=self.on_button_add_label
+                # ),
+            ]
+        )
+        task_query_memo_tag_list = self.page.run_task(self.get_memo_tag_list)
+        task_query_memo_tag_list.add_done_callback(self.handle_memo_tag_list)
+
         self.editor = CustomTextField(
             value='',
             hint_text='正文',
@@ -284,6 +346,7 @@ class MemoEditorView(Column):
         cols_body = Column(
             controls=[
                 self.progress_bar,
+                self.row_labels,
                 self.editor,
                 self.ops_toolbar,
             ],

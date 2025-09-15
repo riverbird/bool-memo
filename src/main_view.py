@@ -41,10 +41,12 @@ class MainView(Column):
     def __init__(self, page):
         super().__init__()
         self.page = page
+
         self.selected_idx = -1
         self.page_idx = 1
         self.loading = False
         self.diary_type_list = None
+        self.dct_tag = {}
 
         self.alignment = MainAxisAlignment.SPACE_BETWEEN,
         self.spacing = 0
@@ -55,7 +57,7 @@ class MainView(Column):
             title=Text('关于'),
             content=Column(
                 controls=[Divider(height=1, color='gray'),
-                          Text('布尔备忘v0.1.0'),
+                          Text('布尔备忘v0.2.0'),
                           Text('一个快速的备忘记录软件，支持Markdown。'),
                           Text('浙江舒博特网络科技有限公司 出品'),
                           Text('官网: http://https://www.zjsbt.cn/service/derivatives'),
@@ -104,6 +106,26 @@ class MainView(Column):
         self.page.run_task(self.query_memos_list)
 
     async def query_memos_list(self, append_mode='restart', tag_id=None):
+        def on_btn_expand_click(e):
+            markdown_value = e.control.data
+            col = e.control.parent
+            markdown_control = col.controls[1]
+            markdown_control.value = markdown_value
+            e.control.visible = False
+            retract_btn = col.controls[4]
+            retract_btn.visible = True
+            self.note_list.update()
+
+        def on_btn_retract_click(e):
+            markdown_value = e.control.data
+            col = e.control.parent
+            markdown_control = col.controls[1]
+            markdown_control.value = markdown_value
+            e.control.visible = False
+            expand_btn = col.controls[3]
+            expand_btn.visible = True
+            self.note_list.update()
+
         self.progress_bar.visible = True
         self.page.update()
         if append_mode == 'restart':
@@ -129,6 +151,26 @@ class MainView(Column):
                 for memo in lst_memo:
                     dt_time = datetime.strptime(memo.get('update_time'), '%Y-%m-%dT%H:%M:%S.%f')
                     str_date = dt_time.strftime("%Y-%m-%d %H:%M:%S")
+                    # 标签
+                    row_tags = Row()
+                    for tag in memo.get('tag', []):
+                        row_tags.controls.append(
+                            Text(f'#{self.dct_tag.get(tag)}',
+                                 color=Colors.BLUE
+                            )
+                        )
+                    # 展开按钮
+                    markdown_value = memo.get('content')[:500]
+                    btn_expand = TextButton(
+                        '展开',
+                        data=memo.get('content'),
+                        on_click=on_btn_expand_click
+                    )
+                    btn_retract = TextButton(
+                        '收起',
+                        data=memo.get('content')[:500],
+                        on_click=on_btn_retract_click
+                    )
                     memo_item = Container(
                         data=memo,
                         margin=3,
@@ -185,7 +227,6 @@ class MainView(Column):
                                                     on_click=self.on_delete_memo
                                                 )
                                             ],
-                                            # icon_color=Colors.WHITE,
                                         )
                                     ]
                                 ),
@@ -196,11 +237,19 @@ class MainView(Column):
                                 #     color=Colors.BLACK87
                                 # ),
                                 Markdown(
-                                    value=memo.get('content'),
+                                    value=markdown_value,
                                 ),
+                                row_tags,
+                                btn_expand,
+                                btn_retract,
                             ],
                         ),
                     )
+                    if len(memo.get('content')) > 500:
+                        btn_expand.visible = True
+                    else:
+                        btn_expand.visible = False
+                    btn_retract.visible = False
                     self.note_list.controls.append(memo_item)
                 if len(lst_memo) == 30:
                     self.btn_load_more.visible = True
@@ -316,7 +365,8 @@ class MainView(Column):
             url = 'https://restapi.10qu.com.cn/memo/'
             headers = {'Authorization': f'Bearer {token}'}
             user_input = {'user': user_id,
-                          'content': content}
+                          'content': content,
+                          'tag': selected_tag_list}
             progress_ring = ProgressRing(width=32, height=32, stroke_width=2)
             progress_ring.top = self.page.height / 2 - progress_ring.height / 2
             progress_ring.left = self.page.width / 2 - progress_ring.width / 2
@@ -360,11 +410,20 @@ class MainView(Column):
             for item in ex.control.items:
                 if select_id == item.uid:
                     select_text = item.text
+                    tag_id = item.data.get('id')
+                    selected_tag_list.append(tag_id)
                     break
             src_value = input_memo.value
             input_memo.value = f"{src_value}\r\n#{select_text}"
             input_memo.update()
 
+        def on_btn_task_clicked(ex):
+            src_value = input_memo.value
+            insert_str = "- [] "
+            input_memo.value = f"{src_value}\r\n{insert_str}"
+            input_memo.update()
+
+        selected_tag_list = []
         input_memo = TextField(
             hint_text='现在您的想法是...',
             label='任何想法',
@@ -407,9 +466,14 @@ class MainView(Column):
             icon=Icons.SEND_OUTLINED,
             on_click=on_btn_post_clicked
         )
+        btn_task_box = IconButton(
+            icon=Icons.CHECK_BOX_OUTLINED,
+            on_click=on_btn_task_clicked
+        )
         row_extra = Row(
             controls=[
                 btn_tag,
+                btn_task_box,
                 Container(expand=True),
                 btn_post
             ],
@@ -602,6 +666,17 @@ class MainView(Column):
             # 距离底部小于50像素时触发加载
             self.page.run_task(self.load_more)
 
+    def on_manage_tags_click(self, e):
+        self.page.controls.clear()
+        from tag_manage_view import TagManageView
+        page_view = SafeArea(
+            TagManageView(self.page),
+            adaptive=True,
+            expand=True
+        )
+        self.page.controls.append(page_view)
+        self.page.update()
+
     async def build_drawer(self):
         cached_user_info_value = await self.page.client_storage.get_async('diary_user_info')
         cached_user_info = json.loads(cached_user_info_value) if cached_user_info_value else {}
@@ -669,6 +744,9 @@ class MainView(Column):
         )
         # 获得日记类型列表
         lst_category = await self.get_memo_tag_list()
+        for tag in lst_category:
+            self.dct_tag[tag.get('id')] = tag.get('name')
+
         cate_list_tiles = [
             head,
             ListTile(
@@ -692,10 +770,19 @@ class MainView(Column):
             controls=cate_list_tiles
             # alignment=MainAxisAlignment.START,
         )
-        if lst_category:
-            col_drawer.controls.append(
-                Divider()
-            )
+        col_drawer.controls.append(
+            Divider(),
+        )
+        col_drawer.controls.append(
+            ListTile(
+                title=Text('管理标签'),
+                selected=self.selected_idx == 0,
+                selected_tile_color=Colors.BLUE_100,
+                hover_color=Colors.BLUE_50,
+                leading=Icon(Icons.SETTINGS),
+                on_click=self.on_manage_tags_click,
+            ),
+        )
         for cate in lst_category:
             col_drawer.controls.append(
                 ListTile(
@@ -710,8 +797,8 @@ class MainView(Column):
         col_drawer.controls.append(Container(expand=True))
         col_drawer.controls.append(
             Divider(
-                thickness=1,
-                color=Colors.GREY_200,
+                # thickness=1,
+                # color=Colors.GREY_200,
             )
         )
         col_drawer.controls.append(ListTile(title=Text('关于我们'),
