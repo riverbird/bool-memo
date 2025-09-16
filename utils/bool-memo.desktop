@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Bool Memo
+Name[zh_CN]=布尔备忘
+Comment=Bool Memo Mobile (Linux Build)
+Exec=/usr/local/bool-memo/bool_memo
+Icon=/usr/local/bool-memo/icon.png
+Terminal=false
+Type=Application
+Categories=Office;
+
