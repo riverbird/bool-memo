@@ -64,7 +64,7 @@ class MainView(Column):
                           ],
                 alignment=MainAxisAlignment.START,
                 width=300,
-                height=90,
+                height=120,
             ),
             actions=[TextButton("确定", on_click=self.on_about_ok_click), ],
             actions_alignment=MainAxisAlignment.END,
@@ -153,12 +153,13 @@ class MainView(Column):
                     str_date = dt_time.strftime("%Y-%m-%d %H:%M:%S")
                     # 标签
                     row_tags = Row()
-                    for tag in memo.get('tag', []):
-                        row_tags.controls.append(
-                            Text(f'#{self.dct_tag.get(tag)}',
-                                 color=Colors.BLUE
+                    if self.dct_tag:
+                        for tag in memo.get('tag', []):
+                            row_tags.controls.append(
+                                Text(f'#{self.dct_tag.get(tag)}',
+                                     color=Colors.BLUE
+                                )
                             )
-                        )
                     # 展开按钮
                     markdown_value = memo.get('content')[:500]
                     btn_expand = TextButton(
@@ -257,8 +258,8 @@ class MainView(Column):
                     self.btn_load_more.visible = False
                 self.progress_bar.visible = False
                 self.page.update()
-        except httpx.HTTPError as e:
-            snack_bar = SnackBar(Text(f"查询用户备忘列表请求失败，请刷新重试。{str(e)}"))
+        except httpx.HTTPError as ex:
+            snack_bar = SnackBar(Text(f"查询用户备忘列表请求失败，请刷新重试。{str(ex)}"))
             self.page.overlay.append(snack_bar)
             snack_bar.open = True
             self.progress_bar.visible = False
@@ -420,7 +421,8 @@ class MainView(Column):
         def on_btn_task_clicked(ex):
             src_value = input_memo.value
             insert_str = "- [] "
-            input_memo.value = f"{src_value}\r\n{insert_str}"
+            # input_memo.value = f"{src_value}\r\n{insert_str}"
+            input_memo.value = f"{src_value}{insert_str}"
             input_memo.update()
 
         selected_tag_list = []
@@ -831,8 +833,8 @@ class MainView(Column):
     def build_interface(self):
         # 笔记列表
         self.note_list = ListView(
-            spacing=10,
-            padding=padding.only(left=2, top=5, right=2, bottom=5),
+            spacing=5,
+            padding=padding.only(left=2, top=0, right=2, bottom=5),
             expand=True,
             # height=self.page.height - 10,
             # on_scroll= self.on_list_view_scroll,

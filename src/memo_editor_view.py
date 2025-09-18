@@ -18,6 +18,8 @@ from flet.core.safe_area import SafeArea
 from flet.core.snack_bar import SnackBar
 from flet.core.text import Text
 from flet.core.types import MainAxisAlignment
+from flet.core.vertical_divider import VerticalDivider
+
 from components.custom_text_field import CustomTextField
 
 
@@ -262,6 +264,12 @@ class MemoEditorView(Column):
     def on_button_redo_click(self, e):
         self.editor.redo()
 
+    def on_btn_task_clicked(self, e):
+        src_value = self.editor.value
+        insert_str = "- [] "
+        self.editor.value = f"{src_value}{insert_str}"
+        self.editor.update()
+
     def on_button_cancel_click(self, e):
         self.page.controls.clear()
         from main_view import MainView
@@ -300,6 +308,12 @@ class MemoEditorView(Column):
                     tooltip='重做',
                     on_click=self.on_button_redo_click
                 ),
+                VerticalDivider(),
+                IconButton(
+                    icon=Icons.CHECK_BOX_OUTLINED,
+                    tooltip='插入任务',
+                    on_click=self.on_btn_task_clicked
+                )
             ]
         )
         self.ops_toolbar = Container(
@@ -347,8 +361,8 @@ class MemoEditorView(Column):
             controls=[
                 self.progress_bar,
                 self.row_labels,
-                self.editor,
                 self.ops_toolbar,
+                self.editor,
             ],
             expand=True,
             # scroll=ScrollMode.AUTO,
